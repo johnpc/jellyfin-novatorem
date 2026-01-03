@@ -17,13 +17,17 @@ interface JellyfinSession {
   };
 }
 
+let cachedUserId: string | null = null;
+
 async function getUserId(): Promise<string> {
+  if (cachedUserId) return cachedUserId;
   const res = await fetch(`${JELLYFIN_URL}/Users?api_key=${JELLYFIN_API_KEY}`);
   const users = await res.json();
   const user = users.find(
     (u: { Name: string; Id: string }) =>
       u.Name.toLowerCase() === JELLYFIN_USERNAME.toLowerCase()
   );
+  cachedUserId = user.Id;
   return user.Id;
 }
 
@@ -37,7 +41,7 @@ async function getSessions(userId: string): Promise<JellyfinSession[]> {
 
 async function getRecentItems(userId: string, type: string) {
   const res = await fetch(
-    `${JELLYFIN_URL}/Users/${userId}/Items?IncludeItemTypes=${type}&Limit=10&SortBy=DatePlayed&SortOrder=Descending&Recursive=true&api_key=${JELLYFIN_API_KEY}`
+    `${JELLYFIN_URL}/Users/${userId}/Items?IncludeItemTypes=${type}&Limit=1&SortBy=DatePlayed&SortOrder=Descending&Recursive=true&api_key=${JELLYFIN_API_KEY}`
   );
   return res.json();
 }
@@ -101,14 +105,16 @@ function generateSVG(
 export async function GET() {
   try {
     const userId = await getUserId();
-    const sessions = await getSessions(userId);
+    const [sessions, recent] = await Promise.all([
+      getSessions(userId),
+      getRecentItems(userId, 'Audio'),
+    ]);
 
     let item = sessions.find(
       (s) => s.NowPlayingItem?.Type === 'Audio'
     )?.NowPlayingItem;
 
     if (!item) {
-      const recent = await getRecentItems(userId, 'Audio');
       item = recent.Items?.[0];
     }
 
@@ -125,7 +131,7 @@ export async function GET() {
     return new Response(svg, {
       headers: {
         'Content-Type': 'image/svg+xml',
-        'Cache-Control': 's-maxage=1',
+        'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
       },
     });
   } catch (error) {
