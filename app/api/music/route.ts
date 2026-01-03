@@ -131,7 +131,7 @@ export async function GET() {
     return new Response(svg, {
       headers: {
         'Content-Type': 'image/svg+xml',
-        'Cache-Control': 's-maxage=60, stale-while-revalidate=86400',
+        'Cache-Control': 's-maxage=60, stale-while-revalidate=2592000',
       },
     });
   } catch (error) {
